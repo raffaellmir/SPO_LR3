@@ -44,15 +44,26 @@ fun main() = application {
     }
 }
 
+
+/*
+
+a := III;
+a := III + b;
+b := (III);
+c := (a * ( III + b ) );
+c := (a * b) + III;
+
+if c > d
+    then c := III;
+    else c := VVV;
+
+*/
 @Composable
 fun testAnalyzer() {
     val sourceCode = """
-        if a > b 
-            then if b > c 
-                then if c > d 
-                    then c := III;
-                    else c := VVV;
-                else c := XXX;
+       
+       a := III + a;
+        
     """.trimIndent()
     val lexicalResults = analyzeLexemes(sourceCode)
     analyzeSyntax(lexicalResults)
