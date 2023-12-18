@@ -22,10 +22,11 @@ class SyntacticalAnalyzer {
         var lexemeList = sourceLexemes
         while (lexemeList.isNotEmpty()) {
 
-            val delimiterIndex = lexemeList.indexOfFirst { it.type == LexemeType.DELIMITER } + 1
+            var delimiterIndex = lexemeList.indexOfFirst { it.type == LexemeType.DELIMITER } + 1
 
             if (delimiterIndex == -1)
                 reportError(value = "${lexemeList.first().position}: начатое выражение не заканчивается разделителем <;>")
+            if (delimiterIndex == 0 ) delimiterIndex = lexemeList.size
 
             val lexemeListBeforeDelimiter: List<Lexeme> = lexemeList.subList(0, delimiterIndex)
             lexemeList =
@@ -40,21 +41,28 @@ class SyntacticalAnalyzer {
 
                     Node.Type.ASSIGN -> {
                         // :=
-                        // В полседнюю очередь обрабатывам присвоение
+                        // Обрабатывам присвоение
                         startNode.addNode(analyzeAssign(lexemeListBeforeDelimiter))
                         lexemeList.drop(delimiterIndex + 1)
                     }
 
-                    Node.Type.PARENTHESIS -> TODO()
-                    Node.Type.OPERATOR -> {
-                        // a + a, a * III, III / III, ...
-                        // Ищём операцию
-                        val conditionalLexemes = findConditionalBlock(lexemeList)
-                        val nodes = analyzeOperation(conditionalLexemes)
+                    Node.Type.PARENTHESIS -> {
+                        // ( ... )
+                        val lexemes = findParenthesisBlock(lexemeList)
+                        val nodes = analyzeParenthesis(lexemes)
                         startNode.addNode(nodes[0])
                         startNode.addNode(nodes[1])
                         startNode.addNode(nodes[2])
-                        lexemeList.drop(conditionalLexemes.lastIndex + 1)
+                        lexemeList.drop(delimiterIndex + 1)
+                    }
+                    Node.Type.OPERATOR -> {
+                        // a + a, a * III, III / III, ...
+                        // Ищём операцию
+                        val nodes = analyzeOperation(lexemeList)
+                        startNode.addNode(nodes[0])
+                        startNode.addNode(nodes[1])
+                        startNode.addNode(nodes[2])
+                        lexemeList.drop(lexemeList.size)
                     }
 
                     Node.Type.CONSTANT_OR_NUMBER -> TODO()
@@ -79,11 +87,28 @@ class SyntacticalAnalyzer {
         }
     }
 
+    private fun findOperationBlock(lexemes: List<Lexeme>): List<Lexeme> {
+        val lastElse = lexemes.findLast { it.value == "else" }
+        return if (lastElse?.position != null) {
+            lexemes.subList(
+                fromIndex = 0,
+                toIndex = lexemes.indexOfFirst { lexeme -> lexeme.type == LexemeType.DELIMITER && lexeme.position !== null && lexeme.position > lastElse.position } + 1
+            )
+        } else {
+            lexemes.subList(
+                fromIndex = 0,
+                toIndex = lexemes.indexOfFirst { lexeme -> lexeme.type == LexemeType.DELIMITER } + 1
+            )
+        }
+    }
+
     private fun findParenthesisBlock(lexemes: List<Lexeme>): List<Lexeme> {
-        val lastCloseParenthesis = lexemes.find { it.value == ";" }
+        val lastCloseParenthesis = lexemes.find { it.value == ")" }
         val lastLexemeIndex =
-            if (lastCloseParenthesis?.position == null) lexemes.indexOfFirst { lexeme -> lexeme.type == LexemeType.DELIMITER } + 1
-            else lexemes.indexOfFirst { lexeme -> lexeme.type == LexemeType.DELIMITER && lexeme.position !== null && lexeme.position > lastCloseParenthesis.position } + 1
+            if (lastCloseParenthesis?.position == null)
+                lexemes.indexOfFirst { lexeme -> lexeme.type == LexemeType.DELIMITER } + 1
+            else
+                lexemes.indexOfFirst { lexeme -> lexeme.type == LexemeType.DELIMITER && lexeme.position !== null && lexeme.position > lastCloseParenthesis.position } + 1
 
         return lexemes.subList(0, lastLexemeIndex)
     }
@@ -112,36 +137,44 @@ class SyntacticalAnalyzer {
         val thirdNode = when (lastLexemes.assumeNodeType()) {
             Node.Type.CONSTANT_OR_NUMBER -> Node(children = mutableListOf(Node(lexeme = thirdLexeme)))
             Node.Type.OPERATOR -> analyzeSyntax(lastLexemes, Node())
-            Node.Type.PARENTHESIS -> TODO()
+            Node.Type.PARENTHESIS -> analyzeSyntax(lastLexemes, Node())
             Node.Type.ASSIGN -> TODO()
             Node.Type.CONDITIONAL -> TODO()
             null -> Node(children = mutableListOf(Node(lexeme = thirdLexeme)))
         }
-        return Node(children = mutableListOf(firstNode, secondNode, thirdNode).filterNotNull().toMutableList())
+        return Node(children = mutableListOf(firstNode, secondNode, thirdNode))
     }
 
     // TODO
-    private fun analyzeParenthesis(lexemes: List<Lexeme>): Node {
-        val parenthesisNode = Node()
+    private fun analyzeParenthesis(lexemes: List<Lexeme>): MutableList<Node> {
 
         // Проверяем наличие открывающейся скобки
-        if (lexemes.first().value != "(")
-            reportError(value = "${lexemes.first().position}: условная конструкция должна начинаться с '(' ")
-
-        // add "(" node
-        parenthesisNode.addNode(Node(lexeme = lexemes.first()))
+        val firstLexeme = lexemes.first()
+        if (firstLexeme.value != "(")
+            reportError(value = "${firstLexeme.position}: конструкция должна начинаться с '(' ")
 
         // Проверяем наличие закрывабщейся скобки
         if (lexemes.none { it.value == ")" })
-            reportError(value = "${lexemes.first().position}: за '(' должно следовать ключевое слово ')' ")
+            reportError(value = "${firstLexeme.position}: за '(' должно следовать ключевое слово ')' ")
 
-        val lexemeListToAnalyze = lexemes.subList(1, lexemes.indexOfFirst { it.value == ")" })
-        parenthesisNode.addNode(analyzeComparison(lexemeListToAnalyze))
+        val middleLexemes = lexemes.subList(1, lexemes.indexOfFirst { it.value == ")" })
+        val secondLexeme = middleLexemes.first()
+        val middleNode = when (middleLexemes.assumeNodeType()) {
+            Node.Type.CONSTANT_OR_NUMBER -> Node(children = mutableListOf(Node(lexeme = secondLexeme)))
+            Node.Type.OPERATOR -> analyzeSyntax(middleLexemes, Node())
+            Node.Type.PARENTHESIS -> TODO()
+            Node.Type.ASSIGN -> TODO()
+            Node.Type.CONDITIONAL -> TODO()
+            null -> Node(children = mutableListOf(Node(lexeme = secondLexeme)))
+        }
 
-        // add ")" node
-        parenthesisNode.addNode(Node(lexeme = lexemes.last()))
+        val lastLexeme = lexemes.last { it.value == ")" }
 
-        return parenthesisNode
+
+        val firstNode = Node(lexeme = firstLexeme)
+        val lastNode = Node(lexeme = lastLexeme)
+
+        return mutableListOf(firstNode, middleNode, lastNode)
     }
 
     /* Анализ if ... then ... else ... */

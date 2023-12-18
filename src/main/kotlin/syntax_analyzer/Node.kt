@@ -24,7 +24,7 @@ data class Node(
 fun List<Lexeme>.assumeNodeType(): Node.Type? {
     return if (first().value == "(")
         Node.Type.PARENTHESIS
-    else if (first().type == LexemeType.IDENTIFIER && get(1).type == LexemeType.ASSIGN_SIGN)
+    else if (size > 1 && first().type == LexemeType.IDENTIFIER && get(1).type == LexemeType.ASSIGN_SIGN)
         Node.Type.ASSIGN
     else if (first().type == LexemeType.CONDITIONAL_OPERATOR)
         Node.Type.CONDITIONAL
