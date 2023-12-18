@@ -12,10 +12,12 @@ data class Lexeme(
 }
 
 enum class LexemeType(val asString: String) {
-    CONDITIONAL_OPERATOR("Оператор условия"),
-    DELIMITER("Разделитель"),
+    CONDITIONAL_OPERATOR("Оператор условия"), // [if, else, then]
+    DELIMITER("Разделитель"), // ;
     IDENTIFIER("Идентификатор"),
     COMPARISON_SIGN("Знак сравнения"),
+    OPERATORS_SIGN("Знак операции"), // [+, -, *, /]
+    PARENTHESIS("Скобка"), // [(, )]
     CONSTANT("Константа"),
     ASSIGN_SIGN("Знак присваивания")
 }

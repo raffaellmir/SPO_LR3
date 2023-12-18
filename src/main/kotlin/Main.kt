@@ -1,16 +1,23 @@
 package org.example
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.material.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import cafe.adriel.bonsai.core.Bonsai
+import cafe.adriel.bonsai.core.BonsaiStyle
 import cafe.adriel.bonsai.core.node.Branch
 import cafe.adriel.bonsai.core.node.Leaf
 import cafe.adriel.bonsai.core.tree.Tree
@@ -27,15 +34,12 @@ import kotlin.time.measureTime
 fun main() = application {
     Window(
         onCloseRequest = ::exitApplication,
-        title = "Партилов Д.М., ИВТ-424, ЛР3",
+        title = "ЛР3",
         state = rememberWindowState(width = 1000.dp, height = 1000.dp)
     ) {
         MaterialTheme {
-            Box(
-                modifier = Modifier.fillMaxSize()
-            ) {
-                testAnalyzer()
-            }
+            Box(modifier = Modifier.fillMaxSize())
+            { testAnalyzer() }
         }
     }
 }
@@ -43,28 +47,21 @@ fun main() = application {
 @Composable
 fun testAnalyzer() {
     val sourceCode = """
-        c := 1.15; { присваиваем переменной c значение 1.15 }
-        a := c;
-        b := 1;
-        if a > b then
-            if a = b then
-               c := 1.32;
-            else
-               c := 1.12;
-        else
-            c := 15; { неуспешное выполнение условия }
-        if 15 > 1.12 then
-            c := 13; 
+        if a > b 
+            then if b > c 
+                then if c > d 
+                    then c := III;
+                    else c := VVV;
+                else c := XXX;
     """.trimIndent()
     val lexicalResults = analyzeLexemes(sourceCode)
-    analyzeSyntax(lexicalResults).onSuccess {
-        drawNode(node = it)
-    }.onFailure {
-        println(it.message)
-    }
+    analyzeSyntax(lexicalResults)
+        .onSuccess { drawNode(node = it) }
+        .onFailure { println(it.printStackTrace()) }
 }
 
-@Composable fun TreeScope.drawBranch(node: Node) {
+@Composable
+fun TreeScope.drawBranch(node: Node) {
     if (node.children.isEmpty()) {
         Leaf(node.lexeme?.value ?: "E")
     } else {
@@ -81,41 +78,28 @@ fun drawNode(node: Node) {
     }
     Bonsai(
         tree = tree,
-        modifier = Modifier.wrapContentSize()
+        modifier = Modifier.wrapContentSize(),
+        style = BonsaiStyle(
+            nodeNameStartPadding = 12.dp,
+            nodePadding = PaddingValues(all = 12.dp),
+            nodeNameTextStyle = TextStyle(
+                fontSize = 20.sp,
+                fontWeight = FontWeight(1000),
+            )
+        )
     )
 }
 
-/**
- * ЛР3, Партилов Д.М., Вариант 3
- * Синтаксический анализатор
- * Входная грамматика:
- * S -> F;
- * F -> if E then T else F | if E then F | a:= a
- * T -> if E then T else T | a := a
- * E -> a < a | a > a | a = a
- */
 private fun analyzeSyntax(lexicalResults: List<AnalyzerResult>) = runCatching {
     val syntaxAnalyzer = SyntacticalAnalyzer()
     syntaxAnalyzer.analyze(lexicalResults)
 }
 
-/**
- * ЛР2, Партилов Д.М., Вариант 3
- * Лексический анализатор
- * Входной язык содержит операторы условия типа if ... then ... else ...  и if ... then,
- * разделённые символом ; (точка с запятой). Операторы условия содержат идентификаторы, знаки сравнения <, >, =,
- * десятичные числа с плавающей точкой (в обычной и логарифм. форме), знак присваивания (:=)
- */
 private fun analyzeLexemes(sourceCode: String): List<AnalyzerResult> {
     val lexicalAnalyzer = LexicalAnalyzer()
     return lexicalAnalyzer.analyze(sourceCode)
 }
 
-/**
- * ЛР1, Партилов Д.М., ИВТ-424Б, Вариант 3
- * Метод 1: Простое рехэширование
- * Метод 2: Бинарное дерево
- */
 private fun testTables() {
     val identifiers = readLinesFromInputStream(inputStream = getStreamFromResources(IDENTIFIERS_FILE_NAME))
     if (identifiers == null) {

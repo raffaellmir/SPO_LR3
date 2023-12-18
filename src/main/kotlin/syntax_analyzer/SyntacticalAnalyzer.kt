@@ -7,9 +7,6 @@ import org.example.lexical_analyzer.LexemeType
 
 class SyntacticalAnalyzer {
 
-    /**
-     * @throws UnsupportedOperationException
-     */
     fun analyze(source: List<AnalyzerResult>): Node {
         val errors = source.filterIsInstance<Error>()
         if (errors.isNotEmpty()) {
@@ -21,36 +18,27 @@ class SyntacticalAnalyzer {
         return analyzeSyntax(source.filterIsInstance<Lexeme>(), Node())
     }
 
-    /**
-     *   c := 1.15; { присваиваем переменной c значение 1.15 }
-     *   a := c;
-     *   b := 1;
-     *   if a > b then
-     *       if a = b then
-     *          c := 1.32;
-     *   else
-     *       c := 15; { неуспешное выполнение условия }
-     *   if b = a then
-     *       c := 0.3;
-     */
     private fun analyzeSyntax(sourceLexemes: List<Lexeme>, startNode: Node): Node {
-        var lexemes = sourceLexemes
-        while (lexemes.isNotEmpty()) {
-            val delimiterIndex = lexemes.indexOfFirst { it.type == LexemeType.DELIMITER }
-            if (delimiterIndex == -1) {
-                reportError(value = "${lexemes.first().position}: начатое выражение не заканчивается разделителем <;>")
-            }
-            val lexemesBeforeDelimiter = lexemes.subList(0, delimiterIndex)
-            if (lexemesBeforeDelimiter.none { it.type == LexemeType.CONDITIONAL_OPERATOR }) {
-                // Если работаем не с условной конструкцией в коде
-                startNode.addNode(analyzeExpression(lexemesBeforeDelimiter))
-                lexemes = lexemes.drop(delimiterIndex + 1)
-            } else {
-                // Ищём законченную условную конструкцию и анализируем всё внутри
-                val conditionalLexemes = locateConditionalBlock(lexemes)
-                startNode.addNode(analyzeConditional(conditionalLexemes))
-                lexemes = lexemes.drop(conditionalLexemes.lastIndex + 1)
-            }
+        var lexemeList = sourceLexemes
+        while (lexemeList.isNotEmpty()) {
+
+            val delimiterIndex = lexemeList.indexOfFirst { it.type == LexemeType.DELIMITER }
+
+            if (delimiterIndex == -1)
+                reportError(value = "${lexemeList.first().position}: начатое выражение не заканчивается разделителем <;>")
+
+            val lexemeListBeforeDelimiter = lexemeList.subList(0, delimiterIndex)
+            lexemeList =
+                if (lexemeListBeforeDelimiter.none { it.type == LexemeType.CONDITIONAL_OPERATOR }) {
+                    // Если работаем не с условной конструкцией в коде
+                    startNode.addNode(analyzeExpression(lexemeListBeforeDelimiter))
+                    lexemeList.drop(delimiterIndex + 1)
+                } else {
+                    // Ищём законченную условную конструкцию и анализируем всё внутри
+                    val conditionalLexemes = locateConditionalBlock(lexemeList)
+                    startNode.addNode(analyzeConditional(conditionalLexemes))
+                    lexemeList.drop(conditionalLexemes.lastIndex + 1)
+                }
         }
         return startNode
     }
@@ -60,25 +48,46 @@ class SyntacticalAnalyzer {
         if (lastElse?.position != null) {
             return lexemes.subList(
                 fromIndex = 0,
-                toIndex = lexemes.indexOfFirst {
-                    it.type == LexemeType.DELIMITER &&
-                    it.position !== null &&
-                    it.position > lastElse.position
+                toIndex = lexemes.indexOfFirst { lexeme ->
+                    lexeme.type == LexemeType.DELIMITER
+                            &&
+                    lexeme.position !== null
+                            &&
+                    lexeme.position > lastElse.position
                 } + 1
             )
         } else {
             return lexemes.subList(
                 fromIndex = 0,
-                toIndex = lexemes.indexOfFirst {
-                    it.type == LexemeType.DELIMITER
+                toIndex = lexemes.indexOfFirst { lexeme -> lexeme.type == LexemeType.DELIMITER } + 1
+            )
+        }
+    }
+
+    private fun locateParenthesisBlock(lexemes: List<Lexeme>): List<Lexeme> {
+        val lastElse = lexemes.findLast { it.value == ")" }
+        if (lastElse?.position != null) {
+            return lexemes.subList(
+                fromIndex = 0,
+                toIndex = lexemes.indexOfFirst { lexeme ->
+                    lexeme.type == LexemeType.DELIMITER
+                            &&
+                            lexeme.position !== null
+                            &&
+                            lexeme.position > lastElse.position
                 } + 1
+            )
+        } else {
+            return lexemes.subList(
+                fromIndex = 0,
+                toIndex = lexemes.indexOfFirst { lexeme -> lexeme.type == LexemeType.DELIMITER } + 1
             )
         }
     }
 
     private fun analyzeExpression(lexemes: List<Lexeme>): Node {
         if (lexemes.size < 3) {
-            reportError(value ="${lexemes.first().position}: незаконченное выражение")
+            reportError(value = "${lexemes.first().position}: незаконченное выражение")
         }
         if (lexemes.first().type != LexemeType.IDENTIFIER) {
             reportError(value = "${lexemes.first().position}: выражение должно начинаться с идентификатора")
@@ -88,7 +97,7 @@ class SyntacticalAnalyzer {
             reportError(value = "${secondLexeme.position}: вместо ${secondLexeme.value} ожидалась операция присваивания")
         }
         val thirdLexeme = lexemes[2]
-        if (thirdLexeme.type != LexemeType.IDENTIFIER && thirdLexeme.type != LexemeType.CONSTANT) {
+        if (thirdLexeme.type != LexemeType.IDENTIFIER && thirdLexeme.type != LexemeType.CONSTANT && thirdLexeme.type != LexemeType.PARENTHESIS) {
             reportError(value = "${thirdLexeme.position}: переменной может присваиваться только другая переменная или константа")
         }
         if (lexemes.size > 3) {
@@ -106,17 +115,22 @@ class SyntacticalAnalyzer {
         return Node(children = mutableListOf(firstNode, secondNode, thirdNode))
     }
 
+    /* Анализ if ... then ... else ... */
     private fun analyzeConditional(lexemes: List<Lexeme>): Node {
         val conditionalNode = Node()
-        if (lexemes.first().value != "if") {
+
+        if (lexemes.first().value != "if")
             reportError(value = "${lexemes.first().position}: условная конструкция должна начинаться с if")
-        }
+
+        // add "if"
         conditionalNode.addNode(Node(lexeme = lexemes.first()))
 
-        if (lexemes.none { it.value == "then" }) {
+        if (lexemes.none { it.value == "then" })
             reportError(value = "${lexemes.first().position}: за предикатом должно следовать ключевое слово then")
-        }
+
+        // add "if condition"
         conditionalNode.addNode(analyzeComparison(lexemes.subList(1, lexemes.indexOfFirst { it.value == "then" })))
+        // add "then"
         conditionalNode.addNode(Node(lexeme = lexemes.find { it.value == "then" }))
 
         if (lexemes.any { it.value == "else" }) {
@@ -144,7 +158,7 @@ class SyntacticalAnalyzer {
 
     private fun analyzeComparison(lexemes: List<Lexeme>): Node {
         if (lexemes.size != 3) {
-            reportError(value ="${lexemes.first().position}: некорректная форма конструкции сравнения двух элементов")
+            reportError(value = "${lexemes.first().position}: некорректная форма конструкции сравнения двух элементов")
         }
         if (lexemes.first().type != LexemeType.IDENTIFIER && lexemes.first().type != LexemeType.CONSTANT) {
             reportError(value = "${lexemes.first().position}: сравниваться должны идентификаторы или константы")

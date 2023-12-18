@@ -1,5 +1,7 @@
 package org.example.lexical_analyzer
 
+import org.example.isRomanDigit
+
 class LexicalAnalyzer {
 
     private enum class State {
@@ -7,7 +9,8 @@ class LexicalAnalyzer {
         IDENTIFIER,
         NUMBER,
         ASSIGN,
-        COMMENT
+        COMMENT,
+//        PARENTHESIS,
     }
 
     private var currentState = State.START
@@ -22,15 +25,16 @@ class LexicalAnalyzer {
                     when {
                         char in listOf(' ', '\n', '\t', '\r') -> {}
 
+                        char.isRomanDigit() -> {
+                            addToBuffer(char)
+                            currentState = State.NUMBER
+                        }
+
                         char.isLetter() -> {
                             addToBuffer(char)
                             currentState = State.IDENTIFIER
                         }
 
-                        char.isDigit() -> {
-                            addToBuffer(char)
-                            currentState = State.NUMBER
-                        }
 
                         char == '{' -> {
                             if (text.substring(startIndex = index + 1).substringBefore('{').contains('}')) {
@@ -38,6 +42,12 @@ class LexicalAnalyzer {
                             } else {
                                 reportError(index, "Незакрытый комментарий!")
                             }
+                        }
+
+                        char == '(' || char == ')' -> {
+                            addToBuffer(char)
+                            addLexeme(index, lexemeBuffer, LexemeType.PARENTHESIS)
+                            currentState = State.START
                         }
 
                         char == ':' -> {
@@ -78,7 +88,7 @@ class LexicalAnalyzer {
                 }
 
                 State.NUMBER -> {
-                    if (char.isDigit() || (char == '.' && lexemeBuffer.contains('.').not())) {
+                    if (char.isRomanDigit()) {
                         addToBuffer(char)
                     } else {
                         addLexeme(index = index, value = lexemeBuffer.removeSuffix("."), type = LexemeType.CONSTANT)
@@ -108,6 +118,8 @@ class LexicalAnalyzer {
                     if (char == '}')
                         currentState = State.START
                 }
+
+
             }
         }
         // print("Исходный код: \n\n\n $text \n\n\n")
@@ -147,10 +159,16 @@ class LexicalAnalyzer {
             Lexeme(value = "then", type = LexemeType.CONDITIONAL_OPERATOR),
             Lexeme(value = "else", type = LexemeType.CONDITIONAL_OPERATOR),
             Lexeme(value = ";", type = LexemeType.DELIMITER),
+            Lexeme(value = "+", type = LexemeType.OPERATORS_SIGN),
+            Lexeme(value = "-", type = LexemeType.OPERATORS_SIGN),
+            Lexeme(value = "*", type = LexemeType.OPERATORS_SIGN),
+            Lexeme(value = "/", type = LexemeType.OPERATORS_SIGN),
             Lexeme(value = "<", type = LexemeType.COMPARISON_SIGN),
             Lexeme(value = ">", type = LexemeType.COMPARISON_SIGN),
             Lexeme(value = "=", type = LexemeType.COMPARISON_SIGN),
-            Lexeme(value = ":=", type = LexemeType.ASSIGN_SIGN)
+            Lexeme(value = "(", type = LexemeType.PARENTHESIS),
+            Lexeme(value = ")", type = LexemeType.PARENTHESIS),
+            Lexeme(value = ":=", type = LexemeType.ASSIGN_SIGN),
         )
     }
 }
