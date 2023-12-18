@@ -62,7 +62,7 @@ if c > d
 fun testAnalyzer() {
     val sourceCode = """
        
-       a := III + a;
+       a := a * b / c + III;
         
     """.trimIndent()
     val lexicalResults = analyzeLexemes(sourceCode)
